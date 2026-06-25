@@ -47,11 +47,11 @@ export function MessageList({
   }
 
   return (
-    <div className="relative min-h-0 flex-1">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <div
         ref={containerRef}
         onScroll={onScroll}
-        className="chat-scroll absolute inset-0 space-y-3 overflow-y-auto overscroll-contain px-3 py-4 sm:space-y-4 sm:px-6 sm:py-5"
+        className="chat-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4 sm:space-y-4 sm:px-6 sm:py-5"
         role="log"
         aria-live="polite"
         aria-relevant="additions"

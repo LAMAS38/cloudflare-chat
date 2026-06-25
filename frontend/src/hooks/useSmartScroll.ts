@@ -18,7 +18,12 @@ export function useSmartScroll(messageCount: number) {
   }, [messageCount]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    bottomRef.current?.scrollIntoView({ behavior });
+    const el = containerRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior });
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior, block: "end" });
+    }
     isNearBottomRef.current = true;
     setShowScrollFab(false);
   }, []);

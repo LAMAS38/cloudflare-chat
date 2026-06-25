@@ -43,9 +43,11 @@ export function MessageInput({ disabled, onSend, onTyping }: MessageInputProps) 
   }, [value]);
 
   useEffect(() => {
-    if (!disabled) {
+    if (disabled) return;
+    const id = window.requestAnimationFrame(() => {
       textareaRef.current?.focus({ preventScroll: true });
-    }
+    });
+    return () => window.cancelAnimationFrame(id);
   }, [disabled]);
 
   const handleChange = (next: string) => {
