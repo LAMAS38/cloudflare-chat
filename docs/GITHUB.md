@@ -1,18 +1,28 @@
 # Publier sur GitHub (compte LAMAS38)
 
-Prérequis : [GitHub CLI](https://cli.github.com/) installé et authentifié.
+## GitHub CLI
+
+Si `gh` n'est pas reconnu, installez-le depuis [cli.github.com](https://cli.github.com/) ou relancez le terminal après installation dans `%LOCALAPPDATA%\GitHubCLI`.
 
 ```powershell
-# 1. Authentification (une seule fois)
-gh auth login
+# Vérifier que gh répond
+gh --version
 
-# 2. Créer le dépôt et pousser
+# Authentification (une seule fois, suivre les invites)
+gh auth login
+```
+
+## Créer le dépôt et pousser
+
+```powershell
 gh repo create cloudflare-chat --public --source=. --remote=origin --push --description "Salon de clavardage temps reel Cloudflare Workers + Durable Objects"
 ```
 
-Si le dépôt existe déjà sur GitHub :
+## Alternative sans gh
+
+1. Créez un dépôt vide **cloudflare-chat** sur [github.com/new](https://github.com/new) (compte LAMAS38, public, sans README).
+2. Puis :
 
 ```powershell
-git remote add origin https://github.com/LAMAS38/cloudflare-chat.git
 git push -u origin main
 ```
