@@ -177,6 +177,17 @@ export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOp
     ws.send(serializeEvent({ type: "typing", isTyping }));
   }, []);
 
+  const dismissError = useCallback(() => setError(null), []);
+
+  const reconnect = useCallback(() => {
+    if (!enabled || !username) return;
+    intentionalCloseRef.current = false;
+    reconnectAttemptRef.current = 0;
+    clearReconnectTimer();
+    setError(null);
+    connectRef.current();
+  }, [enabled, username, clearReconnectTimer]);
+
   return {
     messages,
     userCount,
@@ -186,5 +197,7 @@ export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOp
     error,
     sendMessage,
     setTyping,
+    dismissError,
+    reconnect,
   };
 }

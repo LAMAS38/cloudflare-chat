@@ -1,37 +1,45 @@
-import { useEffect, useRef } from "react";
+import { useSmartScroll } from "../hooks/useSmartScroll";
+import type { ConnectionStatus as Status } from "../hooks/useChatWebSocket";
 import type { Message } from "../types";
-import { Avatar } from "./Avatar";
+import { ChatSkeleton } from "./ChatSkeleton";
+import { MessageBubble } from "./MessageBubble";
+import { ScrollToBottomFab } from "./ScrollToBottomFab";
 
 interface MessageListProps {
   messages: Message[];
   currentUsername: string;
   slug: string;
+  connectionStatus: Status;
+  isLoadingHistory: boolean;
 }
 
-function formatTime(iso: string): string {
-  const date = new Date(iso.endsWith("Z") ? iso : `${iso}Z`);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-}
+export function MessageList({
+  messages,
+  currentUsername,
+  slug,
+  connectionStatus,
+  isLoadingHistory,
+}: MessageListProps) {
+  const { containerRef, bottomRef, onScroll, showScrollFab, scrollToBottom } = useSmartScroll(
+    messages.length,
+  );
 
-export function MessageList({ messages, currentUsername, slug }: MessageListProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  if (isLoadingHistory) {
+    return <ChatSkeleton />;
+  }
 
   if (messages.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
-          <p className="text-3xl">👋</p>
-          <p className="mt-3 font-display text-lg font-semibold text-white">
-            Bienvenue dans #{slug}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 sm:p-8">
+          <p className="text-3xl" aria-hidden>
+            👋
           </p>
-          <p className="mt-1 max-w-xs text-sm text-white/40">
-            Soyez le premier à briser le silence. Vos messages sont gardés dans le Durable Object
-            de ce salon.
+          <h2 className="mt-3 font-display text-lg font-semibold text-white">Bienvenue dans #{slug}</h2>
+          <p className="mt-2 max-w-xs text-sm leading-relaxed text-white/40">
+            {connectionStatus === "connected"
+              ? "Soyez le premier à écrire — votre message sera gardé dans ce salon."
+              : "Connexion au salon en cours…"}
           </p>
         </div>
       </div>
@@ -39,45 +47,33 @@ export function MessageList({ messages, currentUsername, slug }: MessageListProp
   }
 
   return (
-    <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
-      {messages.map((message, index) => {
-        const isOwn = message.username === currentUsername;
-        const showAvatar = !isOwn && (index === 0 || messages[index - 1]?.username !== message.username);
+    <div className="relative min-h-0 flex-1">
+      <div
+        ref={containerRef}
+        onScroll={onScroll}
+        className="chat-scroll absolute inset-0 space-y-3 overflow-y-auto overscroll-contain px-3 py-4 sm:space-y-4 sm:px-6 sm:py-5"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label="Messages du salon"
+      >
+        {messages.map((message, index) => {
+          const isOwn = message.username === currentUsername;
+          const showAvatar =
+            !isOwn && (index === 0 || messages[index - 1]?.username !== message.username);
 
-        return (
-          <article
-            key={message.id}
-            className={`message-enter flex gap-2.5 ${isOwn ? "flex-row-reverse" : "flex-row"}`}
-            style={{ animationDelay: `${Math.min(index, 8) * 30}ms` }}
-          >
-            {!isOwn && (
-              <div className="w-9 shrink-0">
-                {showAvatar ? <Avatar username={message.username} size="md" /> : null}
-              </div>
-            )}
-            <div className={`max-w-[78%] ${isOwn ? "items-end" : "items-start"} flex flex-col`}>
-              {!isOwn && showAvatar && (
-                <p className="mb-1 px-1 text-[11px] font-medium text-white/40">{message.username}</p>
-              )}
-              <div
-                className={`rounded-2xl px-4 py-2.5 ${
-                  isOwn
-                    ? "rounded-br-sm bg-gradient-to-br from-violet-600 to-violet-700 text-white shadow-lg shadow-violet-900/30"
-                    : "rounded-bl-sm border border-white/[0.06] bg-white/[0.04] text-white/90"
-                }`}
-              >
-                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                  {message.content}
-                </p>
-              </div>
-              <p className={`mt-1 px-1 text-[10px] text-white/25 ${isOwn ? "text-right" : ""}`}>
-                {formatTime(message.createdAt)}
-              </p>
-            </div>
-          </article>
-        );
-      })}
-      <div ref={bottomRef} />
+          return (
+            <MessageBubble
+              key={message.id}
+              message={message}
+              isOwn={isOwn}
+              showAvatar={showAvatar}
+            />
+          );
+        })}
+        <div ref={bottomRef} className="h-px shrink-0" aria-hidden />
+      </div>
+      <ScrollToBottomFab visible={showScrollFab} onClick={() => scrollToBottom()} />
     </div>
   );
 }
