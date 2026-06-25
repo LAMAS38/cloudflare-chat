@@ -23,6 +23,7 @@ function buildWebSocketUrl(slug: string, username: string): string {
 export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOptions) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [userCount, setUserCount] = useState(0);
+  const [connectedUsers, setConnectedUsers] = useState<string[]>([]);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("disconnected");
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +98,7 @@ export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOp
           break;
         case "users":
           setUserCount(serverEvent.count);
+          setConnectedUsers(serverEvent.usernames);
           break;
         case "typing":
           setTypingUsers((prev) => {
@@ -149,6 +151,7 @@ export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOp
     setMessages([]);
     setTypingUsers([]);
     setUserCount(0);
+    setConnectedUsers([]);
     connectRef.current();
 
     return () => {
@@ -177,6 +180,7 @@ export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOp
   return {
     messages,
     userCount,
+    connectedUsers,
     typingUsers,
     connectionStatus,
     error,
