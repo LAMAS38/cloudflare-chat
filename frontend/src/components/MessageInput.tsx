@@ -1,4 +1,4 @@
-import { Check, Eraser, Send, Smile } from "lucide-react";
+import { Check, Eraser, Keyboard, Send, Smile } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -60,7 +60,9 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
   const isTypingRef = useRef(false);
   const slugRef = useRef(slug);
   const valueRef = useRef(value);
+  const emojiOpenRef = useRef(emojiOpen);
   valueRef.current = value;
+  emojiOpenRef.current = emojiOpen;
 
   const {
     loadDraft,
@@ -144,11 +146,15 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
     const el = textareaRef.current;
     if (!el) return;
 
-    el.focus({ preventScroll: true });
-    el.setSelectionRange(pending.start, pending.end);
     selectionRef.current = pending;
+    el.setSelectionRange(pending.start, pending.end);
     resizeComposeTextarea(el, COMPOSE_HEIGHT, MAX_TEXTAREA_HEIGHT);
-  }, [value]);
+
+    // Mobile + panneau emoji : insérer sans rouvrir le clavier
+    if (isMobile && emojiOpenRef.current) return;
+
+    el.focus({ preventScroll: true });
+  }, [value, isMobile]);
 
   useLayoutEffect(() => {
     const el = textareaRef.current;
@@ -194,39 +200,77 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
   }, [flushDraft]);
 
   useEffect(() => {
+    if (!isMobile || !emojiOpen) return;
+    textareaRef.current?.blur();
+    setFocused(false);
+  }, [isMobile, emojiOpen]);
+
+  useEffect(() => {
     if (!emojiOpen) return;
 
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (emojiPanelRef.current?.contains(target)) return;
       if (emojiTriggerRef.current?.contains(target)) return;
+      if (isMobile) {
+        setEmojiOpen(false);
+        resetViewportAfterOverlay();
+        return;
+      }
       if (composeRef.current?.contains(target)) return;
       setEmojiOpen(false);
     };
 
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [emojiOpen]);
+  }, [emojiOpen, isMobile]);
 
-  const closeEmojiPicker = useCallback(() => {
-    setEmojiOpen(false);
-    resetViewportAfterOverlay();
-    window.requestAnimationFrame(restoreTextareaSelection);
-  }, [restoreTextareaSelection]);
+  const closeEmojiPicker = useCallback(
+    (options?: { focusInput?: boolean }) => {
+      const focusInput = options?.focusInput ?? !isMobile;
+      setEmojiOpen(false);
+      resetViewportAfterOverlay();
+
+      if (!focusInput || disabled) return;
+
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          restoreTextareaSelection();
+          setFocused(true);
+        });
+      });
+    },
+    [disabled, isMobile, restoreTextareaSelection],
+  );
 
   const openEmojiPicker = useCallback(() => {
     syncSelection();
-    textareaRef.current?.blur();
+    const el = textareaRef.current;
+    if (el) {
+      el.blur();
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    }
+    setFocused(false);
+    stopTyping();
     setEmojiOpen(true);
-  }, [syncSelection]);
+  }, [syncSelection, stopTyping]);
 
   const handleEmojiTriggerClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
     if (emojiOpen) {
-      closeEmojiPicker();
+      closeEmojiPicker({ focusInput: true });
     } else {
       openEmojiPicker();
+    }
+  };
+
+  const handleTextareaClick = () => {
+    syncSelection();
+    if (isMobile && emojiOpen) {
+      closeEmojiPicker({ focusInput: true });
     }
   };
 
@@ -269,11 +313,11 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
       charCount: count,
       nearLimit: count > MAX_LENGTH * 0.9,
       progress: count / MAX_LENGTH,
-      showCounter: count >= SHOW_COUNTER_FROM || focused,
+      showCounter: count >= SHOW_COUNTER_FROM || focused || emojiOpen,
       showBar: count >= MAX_LENGTH * 0.25,
       canSend: !disabled && Boolean(value.trim()),
     };
-  }, [value, disabled, focused]);
+  }, [value, disabled, focused, emojiOpen]);
 
   const showMobileEmoji = emojiOpen && !disabled && isMobile;
   const showDesktopEmoji = emojiOpen && !disabled && !isMobile;
@@ -286,11 +330,11 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
       onPointerDown={(e) => e.preventDefault()}
       onClick={handleEmojiTriggerClick}
       disabled={disabled}
-      aria-label={emojiOpen ? "Fermer les emojis" : "Ouvrir les emojis"}
+      aria-label={emojiOpen ? "Afficher le clavier" : "Ouvrir les emojis"}
       aria-expanded={emojiOpen}
       aria-controls="emoji-picker-panel"
     >
-      <AppIcon icon={Smile} size="sm" />
+      <AppIcon icon={isMobile && emojiOpen ? Keyboard : Smile} size="sm" />
     </button>
   );
 
@@ -322,7 +366,7 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
           e.preventDefault();
           submit();
         }}
-        className={`chat-compose-form safe-bottom relative z-30 shrink-0 border-t border-white/[0.06] bg-[#0a0a10] px-3 md:bg-[#0a0a10]/95 md:px-5 md:py-3 md:backdrop-blur-xl lg:px-6 lg:py-4 ${emojiOpen && isMobile ? "chat-compose-form-emoji-open py-2" : "py-2.5"}`}
+        className={`chat-compose-form safe-bottom relative z-30 shrink-0 border-t border-white/[0.06] bg-[#0a0a10] px-3 md:bg-[#0a0a10]/95 md:px-5 md:py-3 md:backdrop-blur-xl lg:px-6 lg:py-4 ${emojiOpen && isMobile ? "chat-compose-form-emoji-open chat-compose-form-emoji-mode py-2" : "py-2.5"}`}
       >
         {showMobileEmoji && (
           <div className="compose-emoji-inline">
@@ -330,7 +374,7 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
               open={emojiOpen}
               panelRef={emojiPanelRef}
               onPick={insertEmoji}
-              onClose={closeEmojiPicker}
+              onClose={() => closeEmojiPicker({ focusInput: false })}
               variant="mobile"
             />
           </div>
@@ -357,7 +401,7 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
               open={emojiOpen}
               panelRef={emojiPanelRef}
               onPick={insertEmoji}
-              onClose={closeEmojiPicker}
+              onClose={() => closeEmojiPicker()}
               variant="desktop"
             />
           )}
@@ -395,6 +439,8 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
               id="chat-input"
               ref={textareaRef}
               value={value}
+              readOnly={disabled || (isMobile && emojiOpen)}
+              inputMode={isMobile && emojiOpen ? "none" : "text"}
               onChange={(e) => {
                 const el = e.target;
                 const sel = readTextareaSelection(el);
@@ -403,14 +449,19 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
               }}
               onSelect={syncSelection}
               onKeyUp={syncSelection}
-              onClick={syncSelection}
+              onClick={handleTextareaClick}
               onFocus={() => {
+                if (isMobile && emojiOpen) {
+                  textareaRef.current?.blur();
+                  return;
+                }
                 setFocused(true);
                 if (isMobile) {
                   requestAnimationFrame(() => window.scrollTo(0, 0));
                 }
               }}
               onBlur={() => {
+                if (isMobile && emojiOpen) return;
                 setFocused(false);
                 syncSelection();
                 flushDraft(valueRef.current, selectionRef.current);
@@ -422,7 +473,7 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
                 }
                 if (e.key === "Escape" && emojiOpen) {
                   e.preventDefault();
-                  closeEmojiPicker();
+                  closeEmojiPicker({ focusInput: !isMobile });
                 }
               }}
               disabled={disabled}

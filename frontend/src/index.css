@@ -90,6 +90,17 @@ body {
     margin-top: 0.25rem;
     min-height: 0;
   }
+
+  html.chat-page .chat-compose-form-emoji-mode .chat-compose-input {
+    cursor: pointer;
+    caret-color: transparent;
+  }
+
+  html.chat-page .chat-compose-form-emoji-mode .compose-emoji-inline {
+    margin-top: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: none;
+  }
 }
 
 @media (min-width: 768px) {
@@ -877,8 +888,26 @@ body {
     color: white;
   }
 
-  .compose-emoji-inline .media-picker-search {
-    padding-right: 2.75rem;
+  .media-picker-mobile-toolbar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.375rem 0.75rem 0.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .media-picker-mobile-toolbar-title {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .media-picker-mobile-toolbar-close {
+    position: static;
+    transform: none;
   }
 
   .media-picker-mobile-head {

@@ -95,6 +95,7 @@ function CategoryPills({
           type="button"
           className={`media-picker-category-pill ${iconsOnly ? "media-picker-category-pill-icon-only" : ""} ${activeId === category.id ? "media-picker-category-pill-active" : ""}`}
           onClick={() => onSelect(category.id)}
+          onPointerDown={(e) => e.preventDefault()}
           aria-label={category.label}
           title={category.label}
         >
@@ -326,41 +327,49 @@ export function ComposeEmojiPanel({
         </div>
       )}
 
-      <div className="media-picker-search-wrap">
-        <AppIcon icon={Search} size="sm" className="media-picker-search-icon" aria-hidden />
-        <input
-          ref={searchRef}
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher un emoji…"
-          className="media-picker-search"
-          aria-label="Rechercher un emoji"
-          enterKeyHint="search"
-        />
-        {query ? (
+      {!isMobile && (
+        <div className="media-picker-search-wrap">
+          <AppIcon icon={Search} size="sm" className="media-picker-search-icon" aria-hidden />
+          <input
+            ref={searchRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Rechercher un emoji…"
+            className="media-picker-search"
+            aria-label="Rechercher un emoji"
+            enterKeyHint="search"
+          />
+          {query ? (
+            <button
+              type="button"
+              className="media-picker-search-clear"
+              onClick={() => {
+                setQuery("");
+                searchRef.current?.focus();
+              }}
+              aria-label="Effacer la recherche"
+            >
+              <AppIcon icon={X} size="sm" />
+            </button>
+          ) : null}
+        </div>
+      )}
+
+      {isMobile && onClose && (
+        <div className="media-picker-mobile-toolbar">
+          <p className="media-picker-mobile-toolbar-title">Emojis</p>
           <button
             type="button"
-            className="media-picker-search-clear"
-            onClick={() => {
-              setQuery("");
-              searchRef.current?.focus();
-            }}
-            aria-label="Effacer la recherche"
-          >
-            <AppIcon icon={X} size="sm" />
-          </button>
-        ) : isMobile && onClose ? (
-          <button
-            type="button"
-            className="media-picker-search-close"
+            className="media-picker-search-close media-picker-mobile-toolbar-close"
+            onPointerDown={(e) => e.preventDefault()}
             onClick={onClose}
             aria-label="Fermer le sélecteur d'emojis"
           >
             <AppIcon icon={X} size="sm" />
           </button>
-        ) : null}
-      </div>
+        </div>
+      )}
 
       {isMobile && !query.trim() && (
         <CategoryPills
