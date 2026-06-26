@@ -20,7 +20,7 @@ new_sqlite_classes = ["ChatRoom"]
 [[d1_databases]]
 binding = "DB"
 database_name = "pulsechat"
-database_id = "REMPLACER_PAR_VOTRE_DATABASE_ID"
+database_id = "ec427f2c-6d3e-4b65-93de-b650d0f7cb5f"
 migrations_dir = "migrations"
 
 [assets]
