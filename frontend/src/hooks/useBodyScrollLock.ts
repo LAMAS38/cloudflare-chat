@@ -1,15 +1,23 @@
 import { useEffect } from "react";
-import { syncViewportVars } from "../lib/viewport";
+import { resetViewportAfterOverlay, syncViewportVars } from "../lib/viewport";
 
 let lockCount = 0;
+let lockedScrollY = 0;
 
-function resetMobileViewport(): void {
-  window.scrollTo(0, 0);
-  syncViewportVars();
-  requestAnimationFrame(() => {
-    window.scrollTo(0, 0);
-    syncViewportVars();
-  });
+function unlockBodyScroll(): void {
+  const html = document.documentElement;
+  const body = document.body;
+
+  body.style.position = "";
+  body.style.top = "";
+  body.style.left = "";
+  body.style.right = "";
+  body.style.width = "";
+  body.style.overflow = "";
+  html.style.overflow = "";
+
+  window.scrollTo(0, lockedScrollY);
+  resetViewportAfterOverlay();
 }
 
 export function useBodyScrollLock(locked: boolean) {
@@ -19,23 +27,26 @@ export function useBodyScrollLock(locked: boolean) {
     lockCount += 1;
     const html = document.documentElement;
     const body = document.body;
-    const prevBodyOverflow = body.style.overflow;
-    const prevHtmlOverflow = html.style.overflow;
 
+    lockedScrollY = window.scrollY;
+    body.style.position = "fixed";
+    body.style.top = `-${lockedScrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
     body.style.overflow = "hidden";
     html.style.overflow = "hidden";
 
     return () => {
       lockCount = Math.max(0, lockCount - 1);
       if (lockCount === 0) {
-        body.style.overflow = prevBodyOverflow;
-        html.style.overflow = prevHtmlOverflow;
-        resetMobileViewport();
+        unlockBodyScroll();
       }
     };
   }, [locked]);
 }
 
 export function releaseScrollLockViewport(): void {
-  resetMobileViewport();
+  syncViewportVars();
+  resetViewportAfterOverlay();
 }

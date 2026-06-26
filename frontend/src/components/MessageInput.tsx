@@ -24,7 +24,7 @@ import {
 } from "../lib/composeUtils";
 import { clearDraft, getDraftRecord, setDraft } from "../lib/drafts";
 import { useComposeDraft } from "../hooks/useComposeDraft";
-import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { resetViewportAfterOverlay } from "../lib/viewport";
 import { AppIcon } from "./ui/icon";
 import { ComposeEmojiPanel } from "./ComposeEmojiPanel";
@@ -41,8 +41,10 @@ const MAX_LENGTH = MESSAGE_MAX_GRAPHEMES;
 const COMPOSE_HEIGHT = 48;
 const MAX_TEXTAREA_HEIGHT = 160;
 const SHOW_COUNTER_FROM = 1;
+const MOBILE_MEDIA = "(max-width: 767px)";
 
 export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputProps) {
+  const isMobile = useMediaQuery(MOBILE_MEDIA);
   const initialRecordRef = useRef(getDraftRecord(slug));
   const [value, setValue] = useState(() => initialRecordRef.current.content);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -157,7 +159,6 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
 
   useEffect(() => () => stopTyping(), [stopTyping]);
 
-  // Uniquement au changement de salon — pas à chaque re-render parent (WS, typing…)
   useEffect(() => {
     if (slugRef.current === slug) return;
 
@@ -192,7 +193,6 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
     };
   }, [flushDraft]);
 
-  // Fermeture au clic extérieur — refs stables, pas de setTimeout
   useEffect(() => {
     if (!emojiOpen) return;
 
@@ -219,8 +219,6 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
     textareaRef.current?.blur();
     setEmojiOpen(true);
   }, [syncSelection]);
-
-  useBodyScrollLock(emojiOpen);
 
   const handleEmojiTriggerClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -277,170 +275,203 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
     };
   }, [value, disabled, focused]);
 
-  return (
-    <form
-      ref={composeRef}
-      onSubmit={(e: FormEvent) => {
-        e.preventDefault();
-        submit();
-      }}
-      className="safe-bottom relative z-30 shrink-0 border-t border-white/[0.06] bg-[#0a0a10]/95 px-3 py-2.5 backdrop-blur-xl md:px-5 md:py-3 lg:px-6 lg:py-4"
+  const showMobileEmoji = emojiOpen && !disabled && isMobile;
+  const showDesktopEmoji = emojiOpen && !disabled && !isMobile;
+
+  const emojiButton = (
+    <button
+      ref={emojiTriggerRef}
+      type="button"
+      className={`compose-tool-btn ${isMobile ? "compose-tool-btn-row" : ""} ${emojiOpen ? "compose-tool-btn-active" : ""}`}
+      onPointerDown={(e) => e.preventDefault()}
+      onClick={handleEmojiTriggerClick}
+      disabled={disabled}
+      aria-label={emojiOpen ? "Fermer les emojis" : "Ouvrir les emojis"}
+      aria-expanded={emojiOpen}
+      aria-controls="emoji-picker-panel"
     >
-      <AnimatePresence>
-        {showRestored && (
-          <motion.p
-            key="draft-restored"
-            className="compose-toast mb-2"
-            role="status"
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-          >
-            Brouillon restauré
-          </motion.p>
-        )}
-      </AnimatePresence>
+      <AppIcon icon={Smile} size="sm" />
+    </button>
+  );
 
-      <div className="compose-media-wrap">
-        {emojiOpen && !disabled && (
-          <>
-            <button
-              type="button"
-              className="media-picker-backdrop md:hidden"
-              aria-label="Fermer le sélecteur"
-              onClick={closeEmojiPicker}
+  const charCountEl = showCounter ? (
+    <div
+      className={`compose-char-count ${nearLimit ? "compose-char-count-warn" : ""}`}
+      aria-live="polite"
+      aria-label={`${charCount} caractères sur ${MAX_LENGTH}`}
+    >
+      <span className="compose-char-count-value">{charCount}</span>
+      <span className="compose-char-count-sep">/</span>
+      <span className="compose-char-count-max">{MAX_LENGTH}</span>
+    </div>
+  ) : null;
+
+  const saveBadgeEl =
+    saveState === "saved" && value.trim() ? (
+      <span className={`compose-save-badge ${isMobile ? "compose-save-badge-mobile" : ""}`} role="status">
+        <AppIcon icon={Check} size="sm" className="text-emerald-400/90" aria-hidden />
+        Sauvegardé
+      </span>
+    ) : null;
+
+  return (
+    <div className="chat-compose-area">
+      <form
+        ref={composeRef}
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          submit();
+        }}
+        className={`chat-compose-form safe-bottom relative z-30 shrink-0 border-t border-white/[0.06] bg-[#0a0a10] px-3 md:bg-[#0a0a10]/95 md:px-5 md:py-3 md:backdrop-blur-xl lg:px-6 lg:py-4 ${emojiOpen && isMobile ? "chat-compose-form-emoji-open py-2" : "py-2.5"}`}
+      >
+        {showMobileEmoji && (
+          <div className="compose-emoji-inline">
+            <ComposeEmojiPanel
+              open={emojiOpen}
+              panelRef={emojiPanelRef}
+              onPick={insertEmoji}
+              onClose={closeEmojiPicker}
+              variant="mobile"
             />
-            <ComposeEmojiPanel open={emojiOpen} panelRef={emojiPanelRef} onPick={insertEmoji} />
-          </>
+          </div>
         )}
 
-        <div className="chat-compose-toolbar">
-          <div className="chat-compose-tools">
-            <button
-              ref={emojiTriggerRef}
-              type="button"
-              className={`compose-tool-btn ${emojiOpen ? "compose-tool-btn-active" : ""}`}
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={handleEmojiTriggerClick}
-              disabled={disabled}
-              aria-label={emojiOpen ? "Fermer les emojis" : "Ouvrir les emojis"}
-              aria-expanded={emojiOpen}
-              aria-controls="emoji-picker-panel"
+        <AnimatePresence>
+          {showRestored && (
+            <motion.p
+              key="draft-restored"
+              className="compose-toast mb-2"
+              role="status"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
             >
-              <AppIcon icon={Smile} size="sm" />
-            </button>
-          </div>
+              Brouillon restauré
+            </motion.p>
+          )}
+        </AnimatePresence>
 
-          <div className="chat-compose-meta">
-          <AnimatePresence mode="wait">
-            {saveState === "saved" && value.trim() && (
-              <motion.span
-                key="saved"
-                className="compose-save-badge"
-                role="status"
-                initial={{ opacity: 0, scale: 0.92 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.92 }}
-              >
-                <AppIcon icon={Check} size="sm" className="text-emerald-400/90" aria-hidden />
-                Sauvegardé
-              </motion.span>
-            )}
-          </AnimatePresence>
+        <div className="compose-media-wrap">
+          {showDesktopEmoji && (
+            <ComposeEmojiPanel
+              open={emojiOpen}
+              panelRef={emojiPanelRef}
+              onPick={insertEmoji}
+              onClose={closeEmojiPicker}
+              variant="desktop"
+            />
+          )}
 
-          {showCounter && (
-            <div
-              className={`compose-char-count ${nearLimit ? "compose-char-count-warn" : ""}`}
-              aria-live="polite"
-              aria-label={`${charCount} caractères sur ${MAX_LENGTH}`}
-            >
-              <span className="compose-char-count-value">{charCount}</span>
-              <span className="compose-char-count-sep">/</span>
-              <span className="compose-char-count-max">{MAX_LENGTH}</span>
+          {!isMobile && (
+            <div className="chat-compose-toolbar">
+              <div className="chat-compose-tools">{emojiButton}</div>
+              <div className="chat-compose-meta">
+                <AnimatePresence mode="wait">
+                  {saveBadgeEl && (
+                    <motion.span
+                      key="saved"
+                      initial={{ opacity: 0, scale: 0.92 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.92 }}
+                    >
+                      {saveBadgeEl}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+                {charCountEl}
+              </div>
             </div>
           )}
+        </div>
+
+        <div className={`chat-compose-row ${emojiOpen && isMobile ? "mt-0" : "mt-2"}`}>
+          {isMobile && emojiButton}
+
+          <div className="chat-compose-field">
+            <label htmlFor="chat-input" className="sr-only">
+              Votre message
+            </label>
+            <textarea
+              id="chat-input"
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => {
+                const el = e.target;
+                const sel = readTextareaSelection(el);
+                selectionRef.current = sel;
+                patchValue(el.value, sel);
+              }}
+              onSelect={syncSelection}
+              onKeyUp={syncSelection}
+              onClick={syncSelection}
+              onFocus={() => setFocused(true)}
+              onBlur={() => {
+                setFocused(false);
+                syncSelection();
+                flushDraft(valueRef.current, selectionRef.current);
+              }}
+              onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  submit();
+                }
+                if (e.key === "Escape" && emojiOpen) {
+                  e.preventDefault();
+                  closeEmojiPicker();
+                }
+              }}
+              disabled={disabled}
+              rows={1}
+              placeholder={disabled ? "Connexion en cours…" : "Écrivez un message…"}
+              className="chat-compose-input"
+              aria-describedby="chat-input-hint"
+            />
           </div>
-        </div>
-      </div>
-
-      <div className="chat-compose-row mt-2">
-        <div className="chat-compose-field">
-          <label htmlFor="chat-input" className="sr-only">
-            Votre message
-          </label>
-          <textarea
-            id="chat-input"
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => {
-              const el = e.target;
-              const sel = readTextareaSelection(el);
-              selectionRef.current = sel;
-              patchValue(el.value, sel);
-            }}
-            onSelect={syncSelection}
-            onKeyUp={syncSelection}
-            onClick={syncSelection}
-            onFocus={() => setFocused(true)}
-            onBlur={() => {
-              setFocused(false);
-              syncSelection();
-              flushDraft(valueRef.current, selectionRef.current);
-            }}
-            onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-              }
-              if (e.key === "Escape" && emojiOpen) {
-                e.preventDefault();
-                closeEmojiPicker();
-              }
-            }}
-            disabled={disabled}
-            rows={1}
-            placeholder={disabled ? "Connexion en cours…" : "Écrivez un message…"}
-            className="chat-compose-input"
-            aria-describedby="chat-input-hint"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={!canSend}
-          className="chat-compose-send"
-          aria-label="Envoyer le message"
-        >
-          <span className="hidden md:inline">Envoyer</span>
-          <AppIcon icon={Send} size="md" className="md:hidden" aria-hidden />
-        </button>
-      </div>
-
-      {showBar && (
-        <div className="compose-progress-bar mt-2" aria-hidden>
-          <div
-            className={`compose-progress-bar-fill ${nearLimit ? "compose-progress-bar-warn" : ""}`}
-            style={{ width: `${Math.min(100, progress * 100)}%` }}
-          />
-        </div>
-      )}
-
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <p id="chat-input-hint" className="hidden text-[10px] text-white/30 sm:block">
-          {focused
-            ? `Entrée · envoyer  ·  Maj+Entrée · ligne  ·  ${charCount}/${MAX_LENGTH} car.`
-            : "Cliquez pour écrire"}
-        </p>
-        {value.trim() && !disabled && (
           <button
-            type="button"
-            onClick={clearDraftAndInput}
-            className="compose-clear-btn"
+            type="submit"
+            disabled={!canSend}
+            className="chat-compose-send"
+            aria-label="Envoyer le message"
           >
-            <AppIcon icon={Eraser} size="sm" />
-            Effacer
+            <span className="hidden md:inline">Envoyer</span>
+            <AppIcon icon={Send} size="md" className="md:hidden" aria-hidden />
           </button>
+        </div>
+
+        {isMobile && (showCounter || saveBadgeEl) && (
+          <div className="compose-mobile-meta">
+            {saveBadgeEl}
+            {charCountEl}
+          </div>
         )}
-      </div>
-    </form>
+
+        {showBar && (
+          <div className="compose-progress-bar mt-2" aria-hidden>
+            <div
+              className={`compose-progress-bar-fill ${nearLimit ? "compose-progress-bar-warn" : ""}`}
+              style={{ width: `${Math.min(100, progress * 100)}%` }}
+            />
+          </div>
+        )}
+
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p id="chat-input-hint" className="hidden text-[10px] text-white/30 sm:block">
+            {focused
+              ? `Entrée · envoyer  ·  Maj+Entrée · ligne  ·  ${charCount}/${MAX_LENGTH} car.`
+              : "Cliquez pour écrire"}
+          </p>
+          {value.trim() && !disabled && (
+            <button
+              type="button"
+              onClick={clearDraftAndInput}
+              className="compose-clear-btn"
+            >
+              <AppIcon icon={Eraser} size="sm" />
+              Effacer
+            </button>
+          )}
+        </div>
+      </form>
+    </div>
   );
 }

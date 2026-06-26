@@ -169,7 +169,7 @@ export function ChatLayout() {
       </AnimatePresence>
 
       <motion.header
-        className="room-header safe-top z-20 flex shrink-0 items-center justify-between gap-1.5 overflow-visible border-b px-3 py-2.5 backdrop-blur-xl sm:gap-2 sm:px-4 sm:py-3 md:gap-3 md:px-5"
+        className="room-header safe-top sticky top-0 z-30 flex shrink-0 items-center justify-between gap-1.5 overflow-visible border-b px-3 py-2.5 backdrop-blur-xl sm:gap-2 sm:px-4 sm:py-3 md:gap-3 md:px-5"
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={springSnappy}

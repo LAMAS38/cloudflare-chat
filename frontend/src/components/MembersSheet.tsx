@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
@@ -18,31 +19,37 @@ export function MembersSheet({ open, onClose, usernames, currentUsername }: Memb
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   useBodyScrollLock(open);
 
+  const handleClose = useCallback(() => {
+    onClose();
+    resetViewportAfterOverlay();
+  }, [onClose]);
+
   useEffect(() => {
     if (open) return;
     resetViewportAfterOverlay();
   }, [open]);
 
   useEffect(() => {
-    if (open) {
-      closeButtonRef.current?.focus();
-    }
+    if (!open) return;
+    const isMobile = window.matchMedia("(max-width: 767px)").matches;
+    if (isMobile) return;
+    closeButtonRef.current?.focus();
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") handleClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, handleClose]);
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[45] md:hidden"
+          className="fixed inset-0 z-[100] md:hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Membres en ligne"
@@ -54,7 +61,7 @@ export function MembersSheet({ open, onClose, usernames, currentUsername }: Memb
             type="button"
             className="absolute inset-0 bg-[#08080c]/70 backdrop-blur-sm"
             aria-label="Fermer"
-            onClick={onClose}
+            onClick={handleClose}
             variants={backdropVariants}
           />
           <motion.div
@@ -64,7 +71,7 @@ export function MembersSheet({ open, onClose, usernames, currentUsername }: Memb
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.4 }}
             onDragEnd={(_, info) => {
-              if (info.offset.y > 80) onClose();
+              if (info.offset.y > 80) handleClose();
             }}
           >
             <div className="flex justify-center py-3">
@@ -86,7 +93,7 @@ export function MembersSheet({ open, onClose, usernames, currentUsername }: Memb
               <button
                 ref={closeButtonRef}
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="btn-ghost btn-icon min-h-[44px] min-w-[44px]"
                 aria-label="Fermer la liste"
               >
@@ -99,6 +106,7 @@ export function MembersSheet({ open, onClose, usernames, currentUsername }: Memb
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

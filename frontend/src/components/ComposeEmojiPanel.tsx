@@ -22,6 +22,8 @@ interface ComposeEmojiPanelProps {
   open: boolean;
   panelRef: RefObject<HTMLDivElement | null>;
   onPick: (emoji: string) => void;
+  onClose?: () => void;
+  variant?: "mobile" | "desktop";
 }
 
 function EmojiButton({ emoji, onPick }: { emoji: string; onPick: (emoji: string) => void }) {
@@ -70,10 +72,55 @@ function EmptyState({ title, description }: { title: string; description: string
   );
 }
 
-export function ComposeEmojiPanel({ open, panelRef, onPick }: ComposeEmojiPanelProps) {
+function CategoryPills({
+  activeId,
+  onSelect,
+  compact = false,
+  iconsOnly = false,
+}: {
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  compact?: boolean;
+  iconsOnly?: boolean;
+}) {
+  return (
+    <div
+      className={`media-picker-category-nav ${compact ? "media-picker-category-nav-compact" : ""} ${iconsOnly ? "media-picker-category-nav-icons" : ""}`}
+      role="navigation"
+      aria-label="Catégories"
+    >
+      {EMOJI_CATEGORIES.map((category) => (
+        <button
+          key={category.id}
+          type="button"
+          className={`media-picker-category-pill ${iconsOnly ? "media-picker-category-pill-icon-only" : ""} ${activeId === category.id ? "media-picker-category-pill-active" : ""}`}
+          onClick={() => onSelect(category.id)}
+          aria-label={category.label}
+          title={category.label}
+        >
+          <span className="media-picker-category-pill-icon" aria-hidden>
+            {category.emojis[0]}
+          </span>
+          {!iconsOnly && <span>{category.label}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function ComposeEmojiPanel({
+  open,
+  panelRef,
+  onPick,
+  onClose,
+  variant = "desktop",
+}: ComposeEmojiPanelProps) {
+  const isMobile = variant === "mobile";
   const [tab, setTab] = useState<EmojiTab>("all");
   const [query, setQuery] = useState("");
-  const [focusCategory, setFocusCategory] = useState<string | null>(null);
+  const [focusCategory, setFocusCategory] = useState<string | null>(
+    () => EMOJI_CATEGORIES[0]?.id ?? null,
+  );
   const [recent, setRecent] = useState<string[]>(() => getRecentEmojis());
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -87,11 +134,16 @@ export function ComposeEmojiPanel({ open, panelRef, onPick }: ComposeEmojiPanelP
     [recent, query],
   );
 
+  const activeCategory = useMemo(() => {
+    if (!focusCategory) return EMOJI_CATEGORIES[0];
+    return EMOJI_CATEGORIES.find((category) => category.id === focusCategory) ?? EMOJI_CATEGORIES[0];
+  }, [focusCategory]);
+
   useEffect(() => {
     if (!open) {
       setTab("all");
       setQuery("");
-      setFocusCategory(null);
+      setFocusCategory(EMOJI_CATEGORIES[0]?.id ?? null);
       return;
     }
 
@@ -99,27 +151,13 @@ export function ComposeEmojiPanel({ open, panelRef, onPick }: ComposeEmojiPanelP
   }, [open]);
 
   useEffect(() => {
-    if (tab === "emoji" && !focusCategory) {
-      setFocusCategory(EMOJI_CATEGORIES[0]?.id ?? null);
-    }
-  }, [tab, focusCategory]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const isMobile = window.matchMedia("(max-width: 767px)").matches;
-    if (isMobile) return;
+    if (!open || isMobile) return;
 
     const id = window.requestAnimationFrame(() => {
       searchRef.current?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(id);
-  }, [open]);
-
-  const activeCategory = useMemo(() => {
-    if (!focusCategory) return EMOJI_CATEGORIES[0];
-    return EMOJI_CATEGORIES.find((category) => category.id === focusCategory) ?? EMOJI_CATEGORIES[0];
-  }, [focusCategory]);
+  }, [open, isMobile]);
 
   const openCategory = useCallback((categoryId: string) => {
     setFocusCategory(categoryId);
@@ -159,11 +197,102 @@ export function ComposeEmojiPanel({ open, panelRef, onPick }: ComposeEmojiPanelP
     );
   };
 
-  return (
+  const renderMobileBody = () => {
+    if (filteredCategories.length === 0) {
+      return (
+        <EmptyState title="Aucun résultat" description="Essayez « rire », « coeur » ou un emoji." />
+      );
+    }
+
+    if (query.trim()) {
+      return (
+        <div className="media-picker-sections">
+          {filteredCategories.map((category) => (
+            <section key={category.id} className="media-picker-section">
+              <h3 className="media-picker-section-title">{category.label}</h3>
+              <EmojiGrid emojis={category.emojis} onPick={onPick} />
+            </section>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <div className="media-picker-sections media-picker-sections-mobile">
+        {filteredRecent.length > 0 && (
+          <section className="media-picker-section media-picker-section-recent">
+            <div className="media-picker-row">
+              {filteredRecent.map((emoji) => (
+                <EmojiButton key={`recent-${emoji}`} emoji={emoji} onPick={onPick} />
+              ))}
+            </div>
+          </section>
+        )}
+        <section className="media-picker-section">
+          <EmojiGrid emojis={activeCategory?.emojis ?? []} onPick={onPick} />
+        </section>
+      </div>
+    );
+  };
+
+  const renderDesktopBody = () => {
+    if (tab === "all") {
+      return (
+        <div className="media-picker-sections">
+          {filteredRecent.length > 0 && (
+            <section className="media-picker-section">
+              <div className="media-picker-section-head">
+                <h3 className="media-picker-section-title">Récents</h3>
+              </div>
+              <div className="media-picker-row">
+                {filteredRecent.map((emoji) => (
+                  <EmojiButton key={`recent-${emoji}`} emoji={emoji} onPick={onPick} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {filteredCategories.length === 0 ? (
+            <EmptyState title="Aucun résultat" description="Essayez « rire », « coeur » ou un emoji." />
+          ) : (
+            filteredCategories.map((category) => renderCategorySection(category, true))
+          )}
+        </div>
+      );
+    }
+
+    if (filteredCategories.length === 0) {
+      return (
+        <EmptyState title="Aucun résultat" description="Essayez « rire », « coeur » ou un emoji." />
+      );
+    }
+
+    if (query.trim()) {
+      return (
+        <div className="media-picker-sections">
+          {filteredCategories.map((category) => (
+            <section key={category.id} className="media-picker-section">
+              <h3 className="media-picker-section-title">{category.label}</h3>
+              <EmojiGrid emojis={category.emojis} onPick={onPick} />
+            </section>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <section className="media-picker-section">
+        <h3 className="media-picker-section-title">{activeCategory?.label}</h3>
+        <EmojiGrid emojis={activeCategory?.emojis ?? []} onPick={onPick} />
+      </section>
+    );
+  };
+
+  const panel = (
     <div
       id="emoji-picker-panel"
       ref={panelRef}
-      className="media-picker"
+      className={`media-picker ${isMobile ? "media-picker-mobile" : "media-picker-desktop"}`}
       role="dialog"
       aria-modal="true"
       aria-label="Insérer un emoji"
@@ -173,27 +302,29 @@ export function ComposeEmojiPanel({ open, panelRef, onPick }: ComposeEmojiPanelP
         <span className="media-picker-handle-bar" />
       </div>
 
-      <div className="media-picker-tabs" role="tablist" aria-label="Catégories d'emojis">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === item.id}
-            className={`media-picker-tab ${tab === item.id ? "media-picker-tab-active" : ""}`}
-            onClick={() => {
-              setTab(item.id);
-              if (item.id === "emoji") {
-                setFocusCategory((current) => current ?? EMOJI_CATEGORIES[0]?.id ?? null);
-              } else {
-                setFocusCategory(null);
-              }
-            }}
-          >
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </div>
+      {!isMobile && (
+        <div className="media-picker-tabs" role="tablist" aria-label="Catégories d'emojis">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === item.id}
+              className={`media-picker-tab ${tab === item.id ? "media-picker-tab-active" : ""}`}
+              onClick={() => {
+                setTab(item.id);
+                if (item.id === "emoji") {
+                  setFocusCategory((current) => current ?? EMOJI_CATEGORIES[0]?.id ?? null);
+                } else {
+                  setFocusCategory(null);
+                }
+              }}
+            >
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="media-picker-search-wrap">
         <AppIcon icon={Search} size="sm" className="media-picker-search-icon" aria-hidden />
@@ -207,7 +338,7 @@ export function ComposeEmojiPanel({ open, panelRef, onPick }: ComposeEmojiPanelP
           aria-label="Rechercher un emoji"
           enterKeyHint="search"
         />
-        {query && (
+        {query ? (
           <button
             type="button"
             className="media-picker-search-clear"
@@ -219,68 +350,38 @@ export function ComposeEmojiPanel({ open, panelRef, onPick }: ComposeEmojiPanelP
           >
             <AppIcon icon={X} size="sm" />
           </button>
-        )}
+        ) : isMobile && onClose ? (
+          <button
+            type="button"
+            className="media-picker-search-close"
+            onClick={onClose}
+            aria-label="Fermer le sélecteur d'emojis"
+          >
+            <AppIcon icon={X} size="sm" />
+          </button>
+        ) : null}
       </div>
 
-      {tab === "emoji" && !query.trim() && (
-        <div className="media-picker-category-nav" role="navigation" aria-label="Catégories">
-          {EMOJI_CATEGORIES.map((category) => (
-            <button
-              key={category.id}
-              type="button"
-              className={`media-picker-category-pill ${focusCategory === category.id ? "media-picker-category-pill-active" : ""}`}
-              onClick={() => setFocusCategory(category.id)}
-            >
-              {category.label}
-            </button>
-          ))}
-        </div>
+      {isMobile && !query.trim() && (
+        <CategoryPills
+          activeId={focusCategory}
+          onSelect={setFocusCategory}
+          compact
+          iconsOnly
+        />
+      )}
+
+      {!isMobile && tab === "emoji" && !query.trim() && (
+        <CategoryPills activeId={focusCategory} onSelect={setFocusCategory} />
       )}
 
       <div className="media-picker-body">
-        {tab === "all" && (
-          <div className="media-picker-sections">
-            {filteredRecent.length > 0 && (
-              <section className="media-picker-section">
-                <div className="media-picker-section-head">
-                  <h3 className="media-picker-section-title">Récents</h3>
-                </div>
-                <div className="media-picker-row">
-                  {filteredRecent.map((emoji) => (
-                    <EmojiButton key={`recent-${emoji}`} emoji={emoji} onPick={onPick} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {filteredCategories.length === 0 ? (
-              <EmptyState title="Aucun résultat" description="Essayez « rire », « coeur » ou un emoji." />
-            ) : (
-              filteredCategories.map((category) => renderCategorySection(category, true))
-            )}
-          </div>
-        )}
-
-        {tab === "emoji" && (
-          <div className="media-picker-sections">
-            {filteredCategories.length === 0 ? (
-              <EmptyState title="Aucun résultat" description="Essayez « rire », « coeur » ou un emoji." />
-            ) : query.trim() ? (
-              filteredCategories.map((category) => (
-                <section key={category.id} className="media-picker-section">
-                  <h3 className="media-picker-section-title">{category.label}</h3>
-                  <EmojiGrid emojis={category.emojis} onPick={onPick} />
-                </section>
-              ))
-            ) : (
-              <section className="media-picker-section">
-                <h3 className="media-picker-section-title">{activeCategory?.label}</h3>
-                <EmojiGrid emojis={activeCategory?.emojis ?? []} onPick={onPick} />
-              </section>
-            )}
-          </div>
-        )}
+        {isMobile ? renderMobileBody() : renderDesktopBody()}
       </div>
     </div>
   );
+
+  if (!open) return null;
+
+  return panel;
 }
