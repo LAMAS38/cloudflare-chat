@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, Check, Share2, Users } from "lucide-react";
 import { validateSlug, validateUsername } from "@shared/slug";
+import { useChatViewportLock } from "../hooks/useChatViewportLock";
 import { useChatWebSocket } from "../hooks/useChatWebSocket";
 import { useSeo } from "../hooks/useSeo";
 import { getRoomTheme, roomThemeStyle } from "../lib/roomTheme";
@@ -82,6 +83,8 @@ export function ChatLayout() {
   });
 
   const chatEnabled = slugValidation.valid && username !== null;
+
+  useChatViewportLock(slugValidation.valid);
 
   const {
     messages,

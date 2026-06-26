@@ -51,13 +51,45 @@ body {
   max-height: var(--app-height, 100dvh);
 }
 
-/* Chat plein écran — hauteur stable (layout viewport), pas de position:fixed sur mobile */
+/* Chat plein écran */
 .chat-viewport {
   width: 100%;
   overflow: hidden;
   height: 100dvh;
   height: var(--app-height, 100dvh);
   max-height: var(--app-height, 100dvh);
+}
+
+@media (max-width: 767px) {
+  html.chat-page,
+  html.chat-page body {
+    overflow: hidden;
+    height: 100%;
+    overscroll-behavior: none;
+  }
+
+  html.chat-page #root,
+  html.chat-page .chat-page-root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  html.chat-page .chat-viewport {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    height: auto;
+    max-height: none;
+  }
+
+  html.chat-page .chat-compose-form.safe-bottom {
+    padding-bottom: max(0.375rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  html.chat-page .compose-mobile-meta {
+    margin-top: 0.25rem;
+    min-height: 0;
+  }
 }
 
 @media (min-width: 768px) {

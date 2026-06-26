@@ -30,7 +30,7 @@ function AnimatedRoutes() {
           path="/r/:slug"
           element={
             <motion.div
-              className="h-app min-h-app"
+              className="chat-page-root h-app min-h-app"
               variants={pageVariants}
               initial="initial"
               animate="animate"

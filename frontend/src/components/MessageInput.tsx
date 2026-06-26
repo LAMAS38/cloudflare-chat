@@ -404,7 +404,12 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
               onSelect={syncSelection}
               onKeyUp={syncSelection}
               onClick={syncSelection}
-              onFocus={() => setFocused(true)}
+              onFocus={() => {
+                setFocused(true);
+                if (isMobile) {
+                  requestAnimationFrame(() => window.scrollTo(0, 0));
+                }
+              }}
               onBlur={() => {
                 setFocused(false);
                 syncSelection();
@@ -454,8 +459,8 @@ export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputP
           </div>
         )}
 
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <p id="chat-input-hint" className="hidden text-[10px] text-white/30 sm:block">
+        <div className="mt-2 hidden items-center justify-between gap-2 md:flex">
+          <p id="chat-input-hint" className="text-[10px] text-white/30">
             {focused
               ? `Entrée · envoyer  ·  Maj+Entrée · ligne  ·  ${charCount}/${MAX_LENGTH} car.`
               : "Cliquez pour écrire"}
