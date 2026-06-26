@@ -1,3 +1,5 @@
+import { motion } from "framer-motion";
+import { staggerItem } from "../lib/motion";
 import { Avatar } from "./Avatar";
 
 interface UserListProps {
@@ -11,20 +13,29 @@ export function UserList({ usernames, currentUsername, compact = false }: UserLi
 
   if (sorted.length === 0) {
     return (
-      <p className="px-2 py-6 text-center text-xs text-white/30">
+      <motion.p
+        className="px-2 py-6 text-center text-xs text-white/30"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
         En attente de visiteurs…
-      </p>
+      </motion.p>
     );
   }
 
   return (
     <ul className={`space-y-1 ${compact ? "p-2" : "p-3"}`} role="list">
-      {sorted.map((name) => {
+      {sorted.map((name, index) => {
         const isYou = name === currentUsername;
         return (
-          <li
+          <motion.li
             key={name}
-            className={`flex min-h-[44px] items-center gap-2.5 rounded-xl px-2.5 py-2 ${
+            layout
+            variants={staggerItem}
+            initial="initial"
+            animate="animate"
+            transition={{ delay: index * 0.04 }}
+            className={`flex min-h-[44px] items-center gap-2.5 rounded-xl px-2.5 py-2 transition-colors duration-200 ${
               isYou ? "bg-violet-500/10 ring-1 ring-violet-400/20" : "hover:bg-white/[0.03]"
             }`}
           >
@@ -33,11 +44,13 @@ export function UserList({ usernames, currentUsername, compact = false }: UserLi
               {name}
               {isYou && <span className="ml-1 text-[10px] text-violet-300">(vous)</span>}
             </span>
-            <span
+            <motion.span
               className="h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
               aria-hidden
+              animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
             />
-          </li>
+          </motion.li>
         );
       })}
     </ul>

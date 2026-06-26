@@ -1,0 +1,36 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      wrangler:
+        patterns:
+          - wrangler
+          - "@cloudflare/*"
+      production:
+        dependency-type: production
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      react:
+        patterns:
+          - react*
+          - "@types/react*"
+      vite:
+        patterns:
+          - vite
+          - "@vitejs/*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday

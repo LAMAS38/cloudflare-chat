@@ -8,15 +8,17 @@ export interface Message {
 
 export interface MessageRow {
   id: number;
+  room_slug: string;
   username: string;
   content: string;
   created_at: string;
 }
 
-export function messageFromRow(row: MessageRow, roomSlug: string): Message {
+/** @deprecated Préférez messageFromD1Row dans src/lib/messages.ts */
+export function messageFromRow(row: MessageRow, roomSlug?: string): Message {
   return {
     id: row.id,
-    roomSlug,
+    roomSlug: row.room_slug ?? roomSlug ?? "",
     username: row.username,
     content: row.content,
     createdAt: row.created_at,

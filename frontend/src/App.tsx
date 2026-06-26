@@ -1,18 +1,61 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AnimatePresence, motion, MotionConfig } from "framer-motion";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { ChatLayout } from "./components/ChatLayout";
+import { ViewportProvider } from "./components/ViewportProvider";
 import { HomePage } from "./pages/HomePage";
+import { pageVariants } from "./lib/motion";
+
+function AnimatedRoutes() {
+  const location = useLocation();
+
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        <Route
+          path="/"
+          element={
+            <motion.div
+              className="min-h-app"
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <HomePage />
+            </motion.div>
+          }
+        />
+        <Route
+          path="/r/:slug"
+          element={
+            <motion.div
+              className="h-app min-h-app"
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <ChatLayout />
+            </motion.div>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AnimatePresence>
+  );
+}
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AppShell>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/r/:slug" element={<ChatLayout />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AppShell>
-    </BrowserRouter>
+    <MotionConfig reducedMotion="user">
+      <ViewportProvider>
+        <BrowserRouter>
+          <AppShell>
+            <AnimatedRoutes />
+          </AppShell>
+        </BrowserRouter>
+      </ViewportProvider>
+    </MotionConfig>
   );
 }

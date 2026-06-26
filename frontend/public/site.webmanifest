@@ -1,0 +1,19 @@
+{
+  "name": "PulseChat",
+  "short_name": "PulseChat",
+  "description": "PulseChat, salons de clavardage temps réel",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08080c",
+  "theme_color": "#08080c",
+  "lang": "fr",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

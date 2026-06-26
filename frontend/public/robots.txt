@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /r/
+
+# Salons privés / contenu dynamique — ne pas indexer
+# Page d'accueil indexable pour le référencement de la marque
+
+Sitemap: https://pulsechat.hamidinelatifa.workers.dev/sitemap.xml

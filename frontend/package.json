@@ -1,5 +1,5 @@
 {
-  "name": "frontend",
+  "name": "pulsechat-frontend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -11,6 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "framer-motion": "^12.42.0",
+    "lucide-react": "^1.21.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.0"

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#08080c"/>
+      <stop offset="0.5" stop-color="#120818"/>
+      <stop offset="1" stop-color="#08080c"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#c084fc"/>
+      <stop offset="0.5" stop-color="#fb7185"/>
+      <stop offset="1" stop-color="#5eead4"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.35" r="0.45">
+      <stop stop-color="#9333ea" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#9333ea" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <g opacity="0.04" stroke="#fff" stroke-width="1">
+    <path d="M0 80h1200M0 160h1200M0 240h1200M0 320h1200M0 400h1200M0 480h1200M0 560h1200"/>
+    <path d="M80 0v630M160 0v630M240 0v630M320 0v630M400 0v630M480 0v630M560 0v630M640 0v630M720 0v630M800 0v630M880 0v630M960 0v630M1040 0v630M1120 0v630"/>
+  </g>
+  <text x="600" y="280" text-anchor="middle" font-family="system-ui, sans-serif" font-size="96" font-weight="800" fill="url(#accent)">PulseChat</text>
+  <text x="600" y="340" text-anchor="middle" font-family="system-ui, sans-serif" font-size="32" fill="rgba(255,255,255,0.55)">Salons de clavardage temps réel</text>
+  <text x="600" y="400" text-anchor="middle" font-family="system-ui, sans-serif" font-size="22" fill="rgba(255,255,255,0.35)">Gratuit · Sans compte · Partage par lien</text>
+  <rect x="420" y="460" width="360" height="56" rx="16" fill="rgba(147,51,234,0.25)" stroke="rgba(192,132,252,0.4)" stroke-width="1"/>
+  <text x="600" y="496" text-anchor="middle" font-family="ui-monospace, monospace" font-size="22" fill="rgba(255,255,255,0.7)">/r/votre-salon</text>
+</svg>

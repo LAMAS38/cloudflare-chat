@@ -1,0 +1,27 @@
+name: Setup PulseChat
+description: Node.js + dépendances npm (root et frontend) avec cache
+
+inputs:
+  node-version:
+    description: Version Node.js
+    required: false
+    default: "22"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        node-version-file: .node-version
+        cache: npm
+        cache-dependency-path: |
+          package-lock.json
+          frontend/package-lock.json
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        npm ci
+        npm ci --prefix frontend

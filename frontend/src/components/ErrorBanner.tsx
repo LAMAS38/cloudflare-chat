@@ -1,3 +1,6 @@
+import { X } from "lucide-react";
+import { AppIcon } from "./ui/icon";
+
 interface ErrorBannerProps {
   message: string;
   onDismiss?: () => void;
@@ -21,10 +24,10 @@ export function ErrorBanner({ message, onDismiss, onRetry }: ErrorBannerProps) {
           <button
             type="button"
             onClick={onDismiss}
-            className="btn-ghost rounded-lg px-3 py-1 text-xs text-rose-100/70"
+            className="btn-ghost btn-icon min-h-[36px] min-w-[36px] text-rose-100/70"
             aria-label="Fermer l'alerte"
           >
-            ✕
+            <AppIcon icon={X} size="sm" />
           </button>
         )}
       </div>

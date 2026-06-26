@@ -1,11 +1,10 @@
-import { Hono } from "hono";
+import type { Hono } from "hono";
 import { validateSlug } from "../../shared/slug";
 import type { Env } from "../env";
 import { jsonError } from "../lib/errors";
 
-export const roomRoutes = new Hono<{ Bindings: Env }>();
-
-roomRoutes.get("/r/:slug/ws", async (c) => {
+export function registerRoomRoutes(app: Hono<{ Bindings: Env }>) {
+  app.get("/r/:slug/ws", async (c) => {
   const validation = validateSlug(c.req.param("slug"));
   if (!validation.valid || !validation.slug) {
     return jsonError(c, 400, validation.error ?? "invalid_slug", "Invalid room slug");
@@ -23,4 +22,5 @@ roomRoutes.get("/r/:slug/ws", async (c) => {
   headers.set("X-Room-Slug", validation.slug);
 
   return stub.fetch(new Request(c.req.raw, { headers }));
-});
+  });
+}

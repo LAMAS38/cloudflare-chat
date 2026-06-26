@@ -15,12 +15,12 @@ gh auth login
 ## Créer le dépôt et pousser
 
 ```powershell
-gh repo create cloudflare-chat --public --source=. --remote=origin --push --description "Salon de clavardage temps reel Cloudflare Workers + Durable Objects"
+gh repo create pulsechat --public --source=. --remote=origin --push --description "PulseChat — clavardage temps reel Cloudflare Workers + Durable Objects"
 ```
 
 ## Alternative sans gh
 
-1. Créez un dépôt vide **cloudflare-chat** sur [github.com/new](https://github.com/new) (compte LAMAS38, public, sans README).
+1. Créez un dépôt vide **pulsechat** sur [github.com/new](https://github.com/new) (compte LAMAS38, public, sans README).
 2. Puis :
 
 ```powershell

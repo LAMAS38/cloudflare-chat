@@ -1,23 +1,82 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Check, Eraser, Send, Smile } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  clampGraphemes,
+  countGraphemes,
+  MESSAGE_MAX_GRAPHEMES,
+} from "@shared/textLength";
+import {
+  insertAtSelection,
+  readTextareaSelection,
+  resizeComposeTextarea,
+  type TextSelection,
+} from "../lib/composeUtils";
+import { clearDraft, getDraftRecord, setDraft } from "../lib/drafts";
+import { useComposeDraft } from "../hooks/useComposeDraft";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
+import { resetViewportAfterOverlay } from "../lib/viewport";
+import { AppIcon } from "./ui/icon";
+import { ComposeEmojiPanel } from "./ComposeEmojiPanel";
 
 interface MessageInputProps {
+  slug: string;
   disabled: boolean;
   onSend: (content: string) => boolean;
   onTyping: (isTyping: boolean) => void;
 }
 
 const TYPING_DEBOUNCE_MS = 300;
-const MAX_LENGTH = 2000;
-const MIN_TEXTAREA_HEIGHT = 48;
+const MAX_LENGTH = MESSAGE_MAX_GRAPHEMES;
+const COMPOSE_HEIGHT = 48;
 const MAX_TEXTAREA_HEIGHT = 160;
+const SHOW_COUNTER_FROM = 1;
 
-export function MessageInput({ disabled, onSend, onTyping }: MessageInputProps) {
-  const [value, setValue] = useState("");
+export function MessageInput({ slug, disabled, onSend, onTyping }: MessageInputProps) {
+  const initialRecordRef = useRef(getDraftRecord(slug));
+  const [value, setValue] = useState(() => initialRecordRef.current.content);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composeRef = useRef<HTMLFormElement>(null);
+  const emojiTriggerRef = useRef<HTMLButtonElement>(null);
+  const emojiPanelRef = useRef<HTMLDivElement>(null);
+  const selectionRef = useRef<TextSelection>(initialRecordRef.current.selection);
+  const pendingSelectionRef = useRef<TextSelection | null>(null);
   const typingTimerRef = useRef<number | null>(null);
   const isTypingRef = useRef(false);
+  const slugRef = useRef(slug);
+  const valueRef = useRef(value);
+  valueRef.current = value;
 
-  const stopTyping = () => {
+  const {
+    loadDraft,
+    persistDraft,
+    discardDraft,
+    flushDraft,
+    saveState,
+    showRestored,
+    resetUi,
+  } = useComposeDraft(slug);
+
+  const syncSelection = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    selectionRef.current = readTextareaSelection(el);
+  }, []);
+
+  const stopTyping = useCallback(() => {
     if (typingTimerRef.current !== null) {
       window.clearTimeout(typingTimerRef.current);
       typingTimerRef.current = null;
@@ -26,49 +85,169 @@ export function MessageInput({ disabled, onSend, onTyping }: MessageInputProps) 
       isTypingRef.current = false;
       onTyping(false);
     }
-  };
+  }, [onTyping]);
 
-  const resizeTextarea = () => {
+  const resizeTextarea = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
-    el.style.height = "auto";
-    const next = Math.min(MAX_TEXTAREA_HEIGHT, Math.max(MIN_TEXTAREA_HEIGHT, el.scrollHeight));
-    el.style.height = `${next}px`;
-  };
+    resizeComposeTextarea(el, COMPOSE_HEIGHT, MAX_TEXTAREA_HEIGHT);
+  }, []);
 
-  useEffect(() => () => stopTyping(), []);
+  const notifyTyping = useCallback(
+    (next: string) => {
+      if (!next.trim()) {
+        stopTyping();
+        return;
+      }
+      if (!isTypingRef.current) {
+        isTypingRef.current = true;
+        onTyping(true);
+      }
+      if (typingTimerRef.current !== null) {
+        window.clearTimeout(typingTimerRef.current);
+      }
+      typingTimerRef.current = window.setTimeout(stopTyping, TYPING_DEBOUNCE_MS);
+    },
+    [onTyping, stopTyping],
+  );
+
+  const restoreTextareaSelection = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const { start, end } = selectionRef.current;
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(start, end);
+  }, []);
+
+  const patchValue = useCallback(
+    (next: string, selection?: TextSelection) => {
+      const clamped = clampGraphemes(next, MAX_LENGTH);
+      const sel = selection ?? selectionRef.current;
+      setValue(clamped);
+      notifyTyping(clamped);
+      persistDraft(clamped, sel);
+      selectionRef.current = sel;
+      if (selection) {
+        pendingSelectionRef.current = sel;
+      }
+    },
+    [notifyTyping, persistDraft],
+  );
+
+  useLayoutEffect(() => {
+    const pending = pendingSelectionRef.current;
+    if (!pending) return;
+    pendingSelectionRef.current = null;
+
+    const el = textareaRef.current;
+    if (!el) return;
+
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(pending.start, pending.end);
+    selectionRef.current = pending;
+    resizeComposeTextarea(el, COMPOSE_HEIGHT, MAX_TEXTAREA_HEIGHT);
+  }, [value]);
+
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el || disabled) return;
+    const { start, end } = selectionRef.current;
+    el.setSelectionRange(start, end);
+  }, [disabled]);
+
+  useEffect(() => () => stopTyping(), [stopTyping]);
+
+  // Uniquement au changement de salon — pas à chaque re-render parent (WS, typing…)
+  useEffect(() => {
+    if (slugRef.current === slug) return;
+
+    const previousSlug = slugRef.current;
+    slugRef.current = slug;
+
+    const leaving = valueRef.current;
+    if (leaving.trim()) setDraft(previousSlug, leaving, selectionRef.current);
+    else clearDraft(previousSlug);
+
+    const { content: draft, selection } = loadDraft();
+    setValue(draft);
+    selectionRef.current = selection;
+    pendingSelectionRef.current = selection;
+    setEmojiOpen(false);
+    resetUi();
+  }, [slug, loadDraft, resetUi]);
 
   useEffect(() => {
     resizeTextarea();
-  }, [value]);
+  }, [value, resizeTextarea]);
 
   useEffect(() => {
     if (disabled) return;
-    const id = window.requestAnimationFrame(() => {
-      textareaRef.current?.focus({ preventScroll: true });
-    });
+    const id = window.requestAnimationFrame(restoreTextareaSelection);
     return () => window.cancelAnimationFrame(id);
-  }, [disabled]);
+  }, [disabled, slug, restoreTextareaSelection]);
 
-  const handleChange = (next: string) => {
-    if (next.length > MAX_LENGTH) return;
-    setValue(next);
+  useEffect(() => {
+    return () => {
+      flushDraft(valueRef.current, selectionRef.current);
+    };
+  }, [flushDraft]);
 
-    if (!next.trim()) {
-      stopTyping();
-      return;
+  // Fermeture au clic extérieur — refs stables, pas de setTimeout
+  useEffect(() => {
+    if (!emojiOpen) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (emojiPanelRef.current?.contains(target)) return;
+      if (emojiTriggerRef.current?.contains(target)) return;
+      if (composeRef.current?.contains(target)) return;
+      setEmojiOpen(false);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [emojiOpen]);
+
+  const closeEmojiPicker = useCallback(() => {
+    setEmojiOpen(false);
+    resetViewportAfterOverlay();
+    window.requestAnimationFrame(restoreTextareaSelection);
+  }, [restoreTextareaSelection]);
+
+  const openEmojiPicker = useCallback(() => {
+    syncSelection();
+    textareaRef.current?.blur();
+    setEmojiOpen(true);
+  }, [syncSelection]);
+
+  useBodyScrollLock(emojiOpen);
+
+  const handleEmojiTriggerClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (emojiOpen) {
+      closeEmojiPicker();
+    } else {
+      openEmojiPicker();
     }
+  };
 
-    if (!isTypingRef.current) {
-      isTypingRef.current = true;
-      onTyping(true);
-    }
+  const insertEmoji = (emoji: string) => {
+    if (disabled) return;
+    syncSelection();
+    const { start, end } = selectionRef.current;
+    const { next, selectionStart, selectionEnd } = insertAtSelection(value, start, end, emoji);
+    if (countGraphemes(next) > MAX_LENGTH) return;
+    patchValue(next, { start: selectionStart, end: selectionEnd });
+  };
 
-    if (typingTimerRef.current !== null) {
-      window.clearTimeout(typingTimerRef.current);
-    }
-
-    typingTimerRef.current = window.setTimeout(stopTyping, TYPING_DEBOUNCE_MS);
+  const clearDraftAndInput = () => {
+    setValue("");
+    discardDraft();
+    stopTyping();
+    selectionRef.current = { start: 0, end: 0 };
+    requestAnimationFrame(resizeTextarea);
+    textareaRef.current?.focus();
   };
 
   const submit = () => {
@@ -78,23 +257,114 @@ export function MessageInput({ disabled, onSend, onTyping }: MessageInputProps) 
     const sent = onSend(trimmed);
     if (sent) {
       setValue("");
+      discardDraft();
       stopTyping();
+      setEmojiOpen(false);
+      selectionRef.current = { start: 0, end: 0 };
       requestAnimationFrame(resizeTextarea);
     }
   };
 
-  const nearLimit = value.length > MAX_LENGTH * 0.9;
+  const { charCount, nearLimit, progress, showCounter, showBar, canSend } = useMemo(() => {
+    const count = countGraphemes(value);
+    return {
+      charCount: count,
+      nearLimit: count > MAX_LENGTH * 0.9,
+      progress: count / MAX_LENGTH,
+      showCounter: count >= SHOW_COUNTER_FROM || focused,
+      showBar: count >= MAX_LENGTH * 0.25,
+      canSend: !disabled && Boolean(value.trim()),
+    };
+  }, [value, disabled, focused]);
 
   return (
     <form
+      ref={composeRef}
       onSubmit={(e: FormEvent) => {
         e.preventDefault();
         submit();
       }}
-      className="safe-bottom shrink-0 border-t border-white/[0.06] bg-[#0a0a10]/95 px-3 py-3 backdrop-blur-xl sm:px-6 sm:py-4"
+      className="safe-bottom relative z-30 shrink-0 border-t border-white/[0.06] bg-[#0a0a10]/95 px-3 py-2.5 backdrop-blur-xl md:px-5 md:py-3 lg:px-6 lg:py-4"
     >
-      <div className="flex items-end gap-2 sm:gap-3">
-        <div className="relative min-w-0 flex-1">
+      <AnimatePresence>
+        {showRestored && (
+          <motion.p
+            key="draft-restored"
+            className="compose-toast mb-2"
+            role="status"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+          >
+            Brouillon restauré
+          </motion.p>
+        )}
+      </AnimatePresence>
+
+      <div className="compose-media-wrap">
+        {emojiOpen && !disabled && (
+          <>
+            <button
+              type="button"
+              className="media-picker-backdrop md:hidden"
+              aria-label="Fermer le sélecteur"
+              onClick={closeEmojiPicker}
+            />
+            <ComposeEmojiPanel open={emojiOpen} panelRef={emojiPanelRef} onPick={insertEmoji} />
+          </>
+        )}
+
+        <div className="chat-compose-toolbar">
+          <div className="chat-compose-tools">
+            <button
+              ref={emojiTriggerRef}
+              type="button"
+              className={`compose-tool-btn ${emojiOpen ? "compose-tool-btn-active" : ""}`}
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={handleEmojiTriggerClick}
+              disabled={disabled}
+              aria-label={emojiOpen ? "Fermer les emojis" : "Ouvrir les emojis"}
+              aria-expanded={emojiOpen}
+              aria-controls="emoji-picker-panel"
+            >
+              <AppIcon icon={Smile} size="sm" />
+            </button>
+          </div>
+
+          <div className="chat-compose-meta">
+          <AnimatePresence mode="wait">
+            {saveState === "saved" && value.trim() && (
+              <motion.span
+                key="saved"
+                className="compose-save-badge"
+                role="status"
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.92 }}
+              >
+                <AppIcon icon={Check} size="sm" className="text-emerald-400/90" aria-hidden />
+                Sauvegardé
+              </motion.span>
+            )}
+          </AnimatePresence>
+
+          {showCounter && (
+            <div
+              className={`compose-char-count ${nearLimit ? "compose-char-count-warn" : ""}`}
+              aria-live="polite"
+              aria-label={`${charCount} caractères sur ${MAX_LENGTH}`}
+            >
+              <span className="compose-char-count-value">{charCount}</span>
+              <span className="compose-char-count-sep">/</span>
+              <span className="compose-char-count-max">{MAX_LENGTH}</span>
+            </div>
+          )}
+          </div>
+        </div>
+      </div>
+
+      <div className="chat-compose-row mt-2">
+        <div className="chat-compose-field">
           <label htmlFor="chat-input" className="sr-only">
             Votre message
           </label>
@@ -102,44 +372,75 @@ export function MessageInput({ disabled, onSend, onTyping }: MessageInputProps) 
             id="chat-input"
             ref={textareaRef}
             value={value}
-            onChange={(e) => handleChange(e.target.value)}
+            onChange={(e) => {
+              const el = e.target;
+              const sel = readTextareaSelection(el);
+              selectionRef.current = sel;
+              patchValue(el.value, sel);
+            }}
+            onSelect={syncSelection}
+            onKeyUp={syncSelection}
+            onClick={syncSelection}
+            onFocus={() => setFocused(true)}
+            onBlur={() => {
+              setFocused(false);
+              syncSelection();
+              flushDraft(valueRef.current, selectionRef.current);
+            }}
             onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 submit();
               }
+              if (e.key === "Escape" && emojiOpen) {
+                e.preventDefault();
+                closeEmojiPicker();
+              }
             }}
             disabled={disabled}
             rows={1}
             placeholder={disabled ? "Connexion en cours…" : "Écrivez un message…"}
-            className="input-field w-full resize-none py-3 pr-14 leading-relaxed"
-            style={{ minHeight: MIN_TEXTAREA_HEIGHT, maxHeight: MAX_TEXTAREA_HEIGHT }}
+            className="chat-compose-input"
             aria-describedby="chat-input-hint"
           />
-          <span
-            className={`pointer-events-none absolute bottom-2.5 right-3 text-[10px] tabular-nums ${
-              nearLimit ? "text-amber-400/80" : "text-white/20"
-            }`}
-            aria-hidden
-          >
-            {value.length}/{MAX_LENGTH}
-          </span>
         </div>
         <button
           type="submit"
-          disabled={disabled || !value.trim()}
-          className="btn-primary min-h-[48px] min-w-[48px] shrink-0 px-4 sm:min-w-0 sm:px-5"
+          disabled={!canSend}
+          className="chat-compose-send"
           aria-label="Envoyer le message"
         >
-          <span className="hidden sm:inline">Envoyer</span>
-          <span className="text-lg sm:hidden" aria-hidden>
-            ↑
-          </span>
+          <span className="hidden md:inline">Envoyer</span>
+          <AppIcon icon={Send} size="md" className="md:hidden" aria-hidden />
         </button>
       </div>
-      <p id="chat-input-hint" className="mt-2 hidden text-[10px] text-white/25 sm:block">
-        Entrée pour envoyer · Maj+Entrée pour un saut de ligne
-      </p>
+
+      {showBar && (
+        <div className="compose-progress-bar mt-2" aria-hidden>
+          <div
+            className={`compose-progress-bar-fill ${nearLimit ? "compose-progress-bar-warn" : ""}`}
+            style={{ width: `${Math.min(100, progress * 100)}%` }}
+          />
+        </div>
+      )}
+
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p id="chat-input-hint" className="hidden text-[10px] text-white/30 sm:block">
+          {focused
+            ? `Entrée · envoyer  ·  Maj+Entrée · ligne  ·  ${charCount}/${MAX_LENGTH} car.`
+            : "Cliquez pour écrire"}
+        </p>
+        {value.trim() && !disabled && (
+          <button
+            type="button"
+            onClick={clearDraftAndInput}
+            className="compose-clear-btn"
+          >
+            <AppIcon icon={Eraser} size="sm" />
+            Effacer
+          </button>
+        )}
+      </div>
     </form>
   );
 }

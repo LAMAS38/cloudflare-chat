@@ -1,65 +1,72 @@
+import { motion } from "framer-motion";
 import type { ConnectionStatus as Status } from "../hooks/useChatWebSocket";
+import { springSnappy } from "../lib/motion";
 
 interface ConnectionStatusProps {
-  count: number;
   status: Status;
-  compact?: boolean;
+  className?: string;
 }
+
+export const statusDotClass: Record<Status, string> = {
+  connected: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]",
+  connecting: "bg-amber-400 animate-pulse",
+  reconnecting: "bg-amber-400 animate-pulse",
+  disconnected: "bg-red-400",
+};
 
 const statusConfig: Record<
   Status,
-  { label: string; shortLabel: string; dot: string; pill: string }
+  { label: string; shortLabel: string; pill: string }
 > = {
   connected: {
     label: "En direct",
-    shortLabel: "Live",
-    dot: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]",
+    shortLabel: "Direct",
     pill: "bg-emerald-500/10 text-emerald-300 ring-emerald-400/20",
   },
   connecting: {
     label: "Connexion…",
     shortLabel: "…",
-    dot: "bg-amber-400 animate-pulse",
     pill: "bg-amber-500/10 text-amber-300 ring-amber-400/20",
   },
   reconnecting: {
     label: "Reconnexion…",
     shortLabel: "…",
-    dot: "bg-amber-400 animate-pulse",
     pill: "bg-amber-500/10 text-amber-300 ring-amber-400/20",
   },
   disconnected: {
     label: "Hors ligne",
-    shortLabel: "Off",
-    dot: "bg-red-400",
+    shortLabel: "Hors",
     pill: "bg-red-500/10 text-red-300 ring-red-400/20",
   },
 };
 
-export function ConnectionStatus({ count, status, compact = false }: ConnectionStatusProps) {
+export function ConnectionStatus({ status, className = "" }: ConnectionStatusProps) {
   const config = statusConfig[status];
 
   return (
     <div
-      className="flex shrink-0 items-center gap-1.5 sm:gap-2"
+      className={`flex shrink-0 items-center ${className}`}
       role="status"
       aria-live="polite"
-      aria-label={`${config.label}, ${count} membre${count !== 1 ? "s" : ""} connecté${count !== 1 ? "s" : ""}`}
+      aria-label={config.label}
     >
-      <span className="flex min-h-[36px] items-center gap-1.5 rounded-full bg-white/[0.04] px-2.5 py-1 ring-1 ring-white/[0.06] sm:gap-2 sm:px-3 sm:py-1.5">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${config.dot}`} aria-hidden />
-        <span className="text-xs text-white/70 sm:text-sm">{count}</span>
-      </span>
-      <span
-        className={`hidden rounded-full px-3 py-1.5 text-xs font-medium ring-1 sm:inline ${config.pill}`}
+      <motion.span
+        key={status}
+        className={`inline-flex min-h-[36px] items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ring-1 ${config.pill}`}
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={springSnappy}
       >
-        {config.label}
-      </span>
-      {compact && status !== "connected" && (
-        <span className={`rounded-full px-2 py-1 text-[10px] font-medium ring-1 sm:hidden ${config.pill}`}>
-          {config.shortLabel}
-        </span>
-      )}
+        <motion.span
+          className={`h-2 w-2 shrink-0 rounded-full ${statusDotClass[status]}`}
+          aria-hidden
+          animate={status === "connected" ? { scale: [1, 1.15, 1] } : {}}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <span className="hidden lg:inline">{config.label}</span>
+        <span className="hidden md:inline lg:hidden">{config.shortLabel}</span>
+        <span className="md:hidden">{config.shortLabel}</span>
+      </motion.span>
     </div>
   );
 }

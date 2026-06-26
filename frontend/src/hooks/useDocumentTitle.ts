@@ -1,11 +1,6 @@
-import { useEffect } from "react";
+import { useSeo } from "./useSeo";
 
+/** Met à jour uniquement le titre — préférez `useSeo` pour un SEO complet. */
 export function useDocumentTitle(title: string) {
-  useEffect(() => {
-    const previous = document.title;
-    document.title = title;
-    return () => {
-      document.title = previous;
-    };
-  }, [title]);
+  useSeo({ title, path: typeof window !== "undefined" ? window.location.pathname : "/" });
 }

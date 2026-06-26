@@ -1,23 +1,20 @@
 import { DurableObject } from "cloudflare:workers";
-import type { SqlStorageValue } from "@cloudflare/workers-types";
 import {
   parseClientEvent,
   serializeEvent,
   type ServerEvent,
 } from "../../shared/events";
-import { messageFromRow } from "../../shared/message";
 import { validateUsername } from "../../shared/slug";
+import { countGraphemes, MESSAGE_MAX_GRAPHEMES } from "../../shared/textLength";
 import type { Env } from "../env";
-import { MESSAGES_SCHEMA } from "./schema";
+import { fetchMessageHistory, insertMessage, messageFromD1Row } from "../lib/messages";
+import {
+  MessageRateLimiter,
+  RATE_LIMIT_MAX,
+  RATE_LIMIT_WINDOW_SEC,
+} from "../lib/rateLimit";
 
-interface SqlMessageRow extends Record<string, SqlStorageValue> {
-  id: number;
-  username: string;
-  content: string;
-  created_at: string;
-}
-
-const MAX_MESSAGE_LENGTH = 2000;
+const MAX_MESSAGE_LENGTH = MESSAGE_MAX_GRAPHEMES;
 const HISTORY_LIMIT = 50;
 
 interface SessionAttachment {
@@ -26,9 +23,9 @@ interface SessionAttachment {
 }
 
 export class ChatRoom extends DurableObject<Env> {
-  async fetch(request: Request): Promise<Response> {
-    this.ensureSchema();
+  private readonly rateLimiter = new MessageRateLimiter();
 
+  async fetch(request: Request): Promise<Response> {
     const roomSlug =
       request.headers.get("X-Room-Slug") ??
       new URL(request.url).searchParams.get("room") ??
@@ -63,7 +60,7 @@ export class ChatRoom extends DurableObject<Env> {
     const attachment: SessionAttachment = { username, roomSlug };
     this.ctx.acceptWebSocket(server, [JSON.stringify(attachment)]);
 
-    this.sendHistory(server, roomSlug);
+    await this.sendHistory(server, roomSlug);
     this.broadcast(
       {
         type: "join",
@@ -108,7 +105,7 @@ export class ChatRoom extends DurableObject<Env> {
     }
 
     const content = event.content.trim();
-    if (!content || content.length > MAX_MESSAGE_LENGTH) {
+    if (!content || countGraphemes(content) > MAX_MESSAGE_LENGTH) {
       this.send(ws, {
         type: "error",
         code: "invalid_message",
@@ -117,18 +114,29 @@ export class ChatRoom extends DurableObject<Env> {
       return;
     }
 
-    let inserted: SqlMessageRow;
+    if (this.rateLimiter.isLimited(session.username)) {
+      const retryAfter = Math.ceil(this.rateLimiter.retryAfterMs(session.username) / 1000);
+      this.send(ws, {
+        type: "error",
+        code: "rate_limited",
+        message: `Trop de messages. Réessayez dans ${retryAfter || RATE_LIMIT_WINDOW_SEC} s (max ${RATE_LIMIT_MAX}/${RATE_LIMIT_WINDOW_SEC} s).`,
+      });
+      return;
+    }
+
+    let inserted;
     try {
-      inserted = this.ctx.storage.sql
-        .exec<SqlMessageRow>(
-          `INSERT INTO messages (username, content)
-           VALUES (?, ?)
-           RETURNING id, username, content, created_at`,
-          session.username,
-          content,
-        )
-        .one();
+      inserted = await insertMessage(this.env.DB, session.roomSlug, session.username, content);
     } catch {
+      this.send(ws, {
+        type: "error",
+        code: "persist_failed",
+        message: "Failed to save message",
+      });
+      return;
+    }
+
+    if (!inserted) {
       this.send(ws, {
         type: "error",
         code: "persist_failed",
@@ -139,7 +147,7 @@ export class ChatRoom extends DurableObject<Env> {
 
     this.broadcast({
       type: "message",
-      message: messageFromRow(inserted, session.roomSlug),
+      message: messageFromD1Row(inserted),
     });
   }
 
@@ -158,10 +166,6 @@ export class ChatRoom extends DurableObject<Env> {
 
   async webSocketError(ws: WebSocket): Promise<void> {
     ws.close(1011, "WebSocket error");
-  }
-
-  private ensureSchema(): void {
-    this.ctx.storage.sql.exec(MESSAGES_SCHEMA);
   }
 
   private getSession(ws: WebSocket): SessionAttachment | null {
@@ -187,20 +191,17 @@ export class ChatRoom extends DurableObject<Env> {
     return [...usernames].sort((a, b) => a.localeCompare(b));
   }
 
-  private sendHistory(ws: WebSocket, roomSlug: string): void {
-    const rows = this.ctx.storage.sql
-      .exec<SqlMessageRow>(
-        `SELECT id, username, content, created_at
-         FROM messages
-         ORDER BY created_at DESC
-         LIMIT ?`,
-        HISTORY_LIMIT,
-      )
-      .toArray();
-
-    const messages = rows.map((row) => messageFromRow(row, roomSlug)).reverse();
-
-    this.send(ws, { type: "history", messages });
+  private async sendHistory(ws: WebSocket, roomSlug: string): Promise<void> {
+    try {
+      const messages = await fetchMessageHistory(this.env.DB, roomSlug, HISTORY_LIMIT);
+      this.send(ws, { type: "history", messages });
+    } catch {
+      this.send(ws, {
+        type: "error",
+        code: "history_failed",
+        message: "Impossible de charger l'historique",
+      });
+    }
   }
 
   private send(ws: WebSocket, event: ServerEvent): void {

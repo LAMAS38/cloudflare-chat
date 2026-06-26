@@ -1,8 +1,15 @@
-name = "cloudflare-chat"
+name = "pulsechat"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
+preview_urls = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pulsechat"
+database_id = "ec427f2c-6d3e-4b65-93de-b650d0f7cb5f"
+migrations_dir = "migrations"
 
 [[durable_objects.bindings]]
 name = "CHAT_ROOM"
@@ -16,6 +23,7 @@ new_sqlite_classes = ["ChatRoom"]
 directory = "./frontend/dist"
 not_found_handling = "single-page-application"
 binding = "ASSETS"
+run_worker_first = true
 
 [dev]
 port = 8787

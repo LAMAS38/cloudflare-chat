@@ -1,12 +1,23 @@
 {
-  "name": "cloudflare-chat",
+  "name": "pulsechat",
   "version": "1.0.0",
+  "description": "PulseChat — salons de clavardage temps réel (Cloudflare Workers + Durable Objects)",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build:frontend": "npm run build --prefix frontend",
-    "dev": "npm run build:frontend && wrangler dev",
-    "deploy": "npm run build:frontend && wrangler deploy",
+    "dev": "concurrently -k -n ui,worker -c cyan,magenta \"npm run dev:ui\" \"npm run dev:worker\"",
+    "dev:integrated": "npm run build:frontend && wrangler dev",
+    "dev:worker": "wrangler dev",
+    "dev:ui": "npm run dev --prefix frontend",
+    "deploy": "npm run build:frontend && wrangler d1 migrations apply pulsechat --remote && wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply pulsechat --local",
+    "db:migrate:remote": "wrangler d1 migrations apply pulsechat --remote",
+    "lint": "npm run lint --prefix frontend",
+    "ci": "npm run typecheck && npm run lint && npm run build:frontend",
     "typecheck": "tsc --noEmit && npm run typecheck --prefix frontend"
   },
   "dependencies": {
@@ -15,6 +26,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260625.1",
     "@types/node": "^22.20.0",
+    "concurrently": "^9.2.3",
     "typescript": "^5.9.3",
     "wrangler": "^4.86.0"
   }

@@ -4,6 +4,12 @@ import type { Message } from "@shared/message";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "reconnecting";
 
+export interface ActivityToast {
+  id: string;
+  kind: "join" | "leave";
+  username: string;
+}
+
 interface UseChatWebSocketOptions {
   slug: string;
   username: string | null;
@@ -13,11 +19,20 @@ interface UseChatWebSocketOptions {
 const MAX_BACKOFF_MS = 30_000;
 const BASE_BACKOFF_MS = 1_000;
 const MAX_RECONNECT_ATTEMPTS = 8;
+/** N'afficher une alerte qu'après plusieurs échecs (évite les faux positifs à l'entrée). */
+const ERROR_AFTER_ATTEMPTS = 2;
 
 function buildWebSocketUrl(slug: string, username: string): string {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const params = new URLSearchParams({ username });
   return `${protocol}//${window.location.host}/r/${encodeURIComponent(slug)}/ws?${params.toString()}`;
+}
+
+function detachWebSocket(ws: WebSocket): void {
+  ws.onopen = null;
+  ws.onmessage = null;
+  ws.onclose = null;
+  ws.onerror = null;
 }
 
 export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOptions) {
@@ -27,11 +42,25 @@ export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOp
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("disconnected");
   const [error, setError] = useState<string | null>(null);
+  const [activityToasts, setActivityToasts] = useState<ActivityToast[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const connectionIdRef = useRef(0);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
   const intentionalCloseRef = useRef(false);
+  const usernameRef = useRef(username);
+  usernameRef.current = username;
+
+  const pushActivityToast = useCallback((kind: ActivityToast["kind"], name: string) => {
+    if (name === usernameRef.current) return;
+
+    const id = crypto.randomUUID();
+    setActivityToasts((prev) => [...prev.slice(-2), { id, kind, username: name }]);
+    window.setTimeout(() => {
+      setActivityToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3200);
+  }, []);
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimerRef.current !== null) {
@@ -40,13 +69,31 @@ export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOp
     }
   }, []);
 
+  const closeActiveSocket = useCallback(() => {
+    const ws = wsRef.current;
+    wsRef.current = null;
+    if (!ws) return;
+    detachWebSocket(ws);
+    ws.close();
+  }, []);
+
+  const setTransientError = useCallback((message: string) => {
+    if (reconnectAttemptRef.current >= ERROR_AFTER_ATTEMPTS) {
+      setError(message);
+    }
+  }, []);
+
   const scheduleReconnect = useCallback(() => {
     if (intentionalCloseRef.current) return;
 
     if (reconnectAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
       setConnectionStatus("disconnected");
-      setError("Connexion impossible. Rechargez la page ou vérifiez votre pseudo.");
+      setError("Connexion impossible. Réessayez ou rechargez la page.");
       return;
+    }
+
+    if (reconnectAttemptRef.current >= ERROR_AFTER_ATTEMPTS) {
+      setError("Connexion instable. Nouvelle tentative en cours…");
     }
 
     const attempt = reconnectAttemptRef.current;
@@ -67,20 +114,30 @@ export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOp
     if (!enabled || !username) return;
 
     clearReconnectTimer();
-    wsRef.current?.close();
+    closeActiveSocket();
 
-    setConnectionStatus(reconnectAttemptRef.current === 0 ? "connecting" : "reconnecting");
-    setError(null);
+    const connectionId = ++connectionIdRef.current;
+    const isFirstAttempt = reconnectAttemptRef.current === 0;
+
+    setConnectionStatus(isFirstAttempt ? "connecting" : "reconnecting");
+    if (isFirstAttempt) {
+      setError(null);
+    }
 
     const ws = new WebSocket(buildWebSocketUrl(slug, username));
     wsRef.current = ws;
 
     ws.onopen = () => {
+      if (connectionId !== connectionIdRef.current) return;
+
       reconnectAttemptRef.current = 0;
       setConnectionStatus("connected");
+      setError(null);
     };
 
     ws.onmessage = (event) => {
+      if (connectionId !== connectionIdRef.current) return;
+
       const data = typeof event.data === "string" ? event.data : "";
       const serverEvent = parseServerEvent(data);
       if (!serverEvent) return;
@@ -93,7 +150,11 @@ export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOp
           setMessages((prev) => [...prev, serverEvent.message]);
           break;
         case "join":
+          pushActivityToast("join", serverEvent.username);
+          setUserCount(serverEvent.userCount);
+          break;
         case "leave":
+          pushActivityToast("leave", serverEvent.username);
           setUserCount(serverEvent.userCount);
           break;
         case "users":
@@ -116,7 +177,10 @@ export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOp
     };
 
     ws.onclose = (event) => {
+      if (connectionId !== connectionIdRef.current) return;
+
       wsRef.current = null;
+
       if (intentionalCloseRef.current) {
         setConnectionStatus("disconnected");
         return;
@@ -124,43 +188,48 @@ export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOp
 
       if (event.code === 1008) {
         setConnectionStatus("disconnected");
-        setError(event.reason || "Connexion refusée (pseudo ou salon invalide).");
+        setError(event.reason || "Connexion refusée. Vérifiez votre pseudo ou le salon.");
         return;
       }
 
       scheduleReconnect();
     };
 
+    // onerror ne fournit aucun détail fiable — onclose gère les vrais échecs
     ws.onerror = () => {
-      setError("Connexion WebSocket interrompue");
+      if (connectionId !== connectionIdRef.current) return;
+      setTransientError("Problème de connexion. Nouvelle tentative…");
     };
   };
 
   useEffect(() => {
     if (!enabled || !username) {
       intentionalCloseRef.current = true;
+      connectionIdRef.current += 1;
       clearReconnectTimer();
-      wsRef.current?.close();
-      wsRef.current = null;
+      closeActiveSocket();
       setConnectionStatus("disconnected");
+      setError(null);
       return;
     }
 
     intentionalCloseRef.current = false;
     reconnectAttemptRef.current = 0;
+    setError(null);
     setMessages([]);
     setTypingUsers([]);
     setUserCount(0);
     setConnectedUsers([]);
+    setActivityToasts([]);
     connectRef.current();
 
     return () => {
       intentionalCloseRef.current = true;
+      connectionIdRef.current += 1;
       clearReconnectTimer();
-      wsRef.current?.close();
-      wsRef.current = null;
+      closeActiveSocket();
     };
-  }, [slug, username, enabled, clearReconnectTimer]);
+  }, [slug, username, enabled, clearReconnectTimer, closeActiveSocket]);
 
   const sendMessage = useCallback((content: string) => {
     const ws = wsRef.current;
@@ -199,5 +268,6 @@ export function useChatWebSocket({ slug, username, enabled }: UseChatWebSocketOp
     setTyping,
     dismissError,
     reconnect,
+    activityToasts,
   };
 }
