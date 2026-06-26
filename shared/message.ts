@@ -14,7 +14,7 @@ export interface MessageRow {
   created_at: string;
 }
 
-/** @deprecated Préférez messageFromD1Row dans src/lib/messages.ts */
+/** @deprecated Préférez les helpers dans src/durable-objects/messages.ts */
 export function messageFromRow(row: MessageRow, roomSlug?: string): Message {
   return {
     id: row.id,

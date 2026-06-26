@@ -1,13 +1,13 @@
 # PulseChat
 
-**PulseChat** — salon de clavardage temps réel propulsé par **Cloudflare Workers**, **Durable Objects**, **D1** et **Static Assets**.
+**PulseChat** — salon de clavardage temps réel propulsé par **Cloudflare Workers**, **Durable Objects** (SQLite) et **Static Assets**.
 
 ## Fonctionnalités
 
 - Salons indépendants via URL `/r/:slug`
 - Communication temps réel par WebSocket
-- Persistance des messages dans **Cloudflare D1** (index par salon + date)
-- Un **Durable Object** par salon pour WebSocket et présence
+- Persistance des messages dans le **SQLite intégré** de chaque Durable Object
+- Un **Durable Object** par salon pour WebSocket, présence et stockage
 - Historique des 50 derniers messages à la connexion
 - Indicateur de frappe (« X est en train d'écrire… »)
 - Nombre d'utilisateurs connectés
@@ -19,7 +19,7 @@
 | Couche | Technologie |
 |--------|-------------|
 | Backend | Cloudflare Workers + Hono |
-| Persistance | Cloudflare D1 (messages) + index `room_slug, created_at` |
+| Persistance | SQLite embarqué (Durable Objects) |
 | Temps réel | Durable Objects (WebSocket Hibernation API) |
 | Frontend | React 19 + Vite 6 + Tailwind CSS 4 (Static Assets) |
 | Langage | TypeScript strict |
@@ -28,10 +28,9 @@
 
 ```
 pulsechat/
-├── migrations/             # Schéma D1 (messages + index)
 ├── src/                    # Worker Hono + Durable Object
-│   └── durable-objects/    # ChatRoom (WebSocket + rate limit)
-│   └── lib/                # D1 helpers, rate limiting
+│   └── durable-objects/    # ChatRoom (WebSocket, SQLite, rate limit)
+│   └── lib/                # Rate limiting, erreurs
 ├── shared/                 # Types et protocole WS partagés
 ├── frontend/               # Application React
 ├── wrangler.toml           # Configuration Cloudflare
@@ -127,13 +126,12 @@ Déploiement manuel : **Actions → CI/CD → Run workflow**.
 
 ```bash
 npx wrangler login
-npm run db:migrate:remote   # première fois ou après nouvelle migration
 npm run deploy
 ```
 
 URL de production : `https://pulsechat.<votre-subdomaine>.workers.dev/r/<slug>`
 
-> Chaque salon (`slug`) = un Durable Object pour le temps réel. Les messages sont stockés dans **D1** avec index par salon.
+> Chaque salon (`slug`) = un Durable Object avec son propre SQLite pour les messages et le temps réel.
 
 ## Protocole WebSocket
 
@@ -171,24 +169,24 @@ Client (React) ──HTTP──► Worker (Hono) ──► Static Assets (SPA)
                                               │
                                               ├── WebSockets (broadcast, typing, présence)
                                               ├── Rate limiting (par pseudo)
-                                              └── D1 (messages, index par salon)
+                                              └── SQLite embarqué (messages)
 ```
 
-Chaque salon = un Durable Object (`idFromName(slug)`). Messages persistés dans **D1** partagé, filtrés par `room_slug`.
+Chaque salon = un Durable Object (`idFromName(slug)`) avec sa propre base SQLite.
 
 ## Grille technique
 
 | Exigence | Implémentation |
 |----------|----------------|
-| Durable Object | `ChatRoom` — WebSocket + présence |
+| Durable Object | `ChatRoom` — WebSocket + présence + SQLite |
 | WebSocket | Hibernation API, `/r/:slug/ws` |
-| D1 | Table `messages` + migrations |
+| SQLite (DO) | Table `messages` initialisée au constructeur |
 | 50 messages | `HISTORY_LIMIT = 50` à la connexion |
 | Typing | Event `typing` client/serveur |
 | Présence | `join` / `leave` / `users` |
 | Reconnexion | Backoff exponentiel côté client |
 | Rate limiting | 8 messages / 10 s par pseudo |
-| Index D1 | `idx_messages_room_created`, `idx_messages_room_user_created` |
+| Index SQLite | `idx_messages_created` |
 | Events | `shared/events.ts` typé |
 
 ## Licence

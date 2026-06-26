@@ -1,7 +1,7 @@
 {
   "name": "pulsechat",
   "version": "1.0.0",
-  "description": "PulseChat — salons de clavardage temps réel (Cloudflare Workers + Durable Objects)",
+  "description": "PulseChat — salons de clavardage temps réel (Cloudflare Workers + Durable Objects SQLite)",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,9 +13,7 @@
     "dev:integrated": "npm run build:frontend && wrangler dev",
     "dev:worker": "wrangler dev",
     "dev:ui": "npm run dev --prefix frontend",
-    "deploy": "npm run build:frontend && wrangler d1 migrations apply pulsechat --remote && wrangler deploy",
-    "db:migrate": "wrangler d1 migrations apply pulsechat --local",
-    "db:migrate:remote": "wrangler d1 migrations apply pulsechat --remote",
+    "deploy": "npm run build:frontend && wrangler deploy",
     "lint": "npm run lint --prefix frontend",
     "ci": "npm run typecheck && npm run lint && npm run build:frontend",
     "typecheck": "tsc --noEmit && npm run typecheck --prefix frontend"
